@@ -1,0 +1,71 @@
+import boto3
+from datetime import datetime, timedelta
+
+# Replace with your AWS access keys
+aws_access_key_id = 'your-keys'
+aws_secret_access_key = 'your-keys'
+region_name = 'your-aws-region' # like eg us-east-1
+
+# Replace with your EC2 instance ID
+instance_id = 'your_instance-id'
+disk_path = '/'
+device_name = 'nvme0n1p1'
+fstype = 'ext4'
+
+# Create a CloudWatch client
+cloudwatch = boto3.client(
+    'cloudwatch',
+    aws_access_key_id=aws_access_key_id,
+    aws_secret_access_key=aws_secret_access_key,
+    region_name=region_name
+)
+
+def get_metric(metric_name, namespace, dimensions, period=60):
+    end_time = datetime.utcnow()
+    start_time = end_time - timedelta(minutes=10)
+
+    response = cloudwatch.get_metric_statistics(
+        Namespace=namespace,
+        MetricName=metric_name,
+        Dimensions=dimensions,
+        StartTime=start_time,
+        EndTime=end_time,
+        Period=period,
+        Statistics=['Average'],
+    )
+
+    return response
+
+def print_metrics(metric_name, namespace, dimensions):
+    metrics = get_metric(metric_name, namespace, dimensions)
+    if metrics['Datapoints']:
+        average_value = metrics['Datapoints'][0]['Average']
+        print(f'{metric_name}: {average_value:.2f}')
+    else:
+        print(f'No data available for {metric_name}.')
+
+def main():
+    namespace = 'CWAgent'
+
+    # Memory metrics
+    print("Memory Metrics:")
+    memory_metrics = ['mem_used_percent', 'mem_total', 'mem_free']
+    memory_dimensions = [{'Name': 'InstanceId', 'Value': instance_id}]
+    for metric in memory_metrics:
+        print_metrics(metric, namespace, memory_dimensions)
+
+    # Disk metrics
+    print("\nDisk Metrics:")
+    disk_metrics = ['disk_used_percent', 'disk_free', 'disk_total']
+    disk_dimensions = [
+        {'Name': 'InstanceId', 'Value': instance_id},
+        {'Name': 'path', 'Value': disk_path},
+        {'Name': 'device', 'Value': device_name},
+        {'Name': 'fstype', 'Value': fstype}
+    ]
+    for metric in disk_metrics:
+        print_metrics(metric, namespace, disk_dimensions)
+
+if __name__ == "__main__":
+    main()
+
